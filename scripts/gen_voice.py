@@ -1,8 +1,9 @@
 # -*- coding: utf-8 -*-
-"""逐镜生成中文口播配音（edge_tts，微软晓晓），输出 shots/aud/shotNN.m4a。
+"""逐镜生成中文口播配音（edge_tts，默认男声云扬），输出 shots/aud/shotNN.m4a。
 依赖：edge_tts（pip install edge_tts），需联网。
 用法: python gen_voice.py            # 生成全部 1..10 镜
       python gen_voice.py 1 3 5      # 仅生成指定镜
+改声线：编辑下方 VOICE 变量（如换回女声 zh-CN-XiaoxiaoNeural）。
 """
 import os, sys, asyncio
 import edge_tts
@@ -15,7 +16,7 @@ except Exception:
     WORK = os.environ.get('WB_WORKDIR', r'E:\workbuddy\2026-09-22-15-27-07')
     SUBS = {1: '示例口播文案。'}
 
-VOICE = 'zh-CN-XiaoxiaoNeural'
+VOICE = 'zh-CN-YunyangNeural'  # 男声（沉稳，适合科普讲解）；女声可改 zh-CN-XiaoxiaoNeural
 AUD = os.path.join(WORK, 'shots', 'aud')
 
 

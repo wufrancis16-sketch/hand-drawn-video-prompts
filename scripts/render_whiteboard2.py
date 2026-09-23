@@ -187,7 +187,18 @@ function reveal(t){
     for (let i=0;i<k;i++) mctx.drawImage(SPR, it.pts[i][0]-it.r, it.pts[i][1]-it.r, it.r*2, it.r*2);
   }
 }
-function wrap(text, n){ const L=[]; for(let i=0;i<text.length;i+=n) L.push(text.slice(i,i+n)); return L; }
+function wrap(text, n){
+  if (text.length <= n) return [text];
+  const mid = Math.ceil(text.length / 2);
+  const P = '，。；、？！：,;.?!:';
+  let cut = -1;
+  for (let d = 0; d <= Math.floor(n/2); d++){
+    if (mid + d < text.length && P.indexOf(text[mid+d]) >= 0){ cut = mid + d + 1; break; }
+    if (mid - d - 1 >= 0 && P.indexOf(text[mid-d-1]) >= 0){ cut = mid - d; break; }
+  }
+  if (cut < 0) cut = mid;
+  return [text.slice(0, cut), text.slice(cut)];
+}
 function renderAt(t){
   const ctx = document.getElementById('cv').getContext('2d');
   ctx.fillStyle = '#F8F6EF'; ctx.fillRect(0,0,1920,1080);

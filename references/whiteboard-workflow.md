@@ -46,6 +46,7 @@ python scripts/fix_bg.py <WB_WORKDIR>/outputs_land/raw <WB_WORKDIR>/outputs_land
 python scripts/gen_voice.py            # 全部 1..10 镜
 python scripts/gen_voice.py 3 5        # 仅重出某镜
 ```
+默认声线为**男声（云扬 `zh-CN-YunyangNeural`，沉稳适合科普）**。换女声改 `gen_voice.py` 顶部 `VOICE='zh-CN-XiaoxiaoNeural'`。
 输出 `shots/aud/shotNN.m4a`，每镜时长由该段口播决定（后续动画时长据此对齐）。
 
 ### ⑤ 持笔手素材
@@ -67,9 +68,12 @@ python scripts/gen_bgm.py --list                                  # 列出全部
 python scripts/gen_bgm.py --variant 3 --dur 49.0 --out bgm.wav    # 指定第 3 首(固定)
 python scripts/gen_bgm.py --seed 1234 --dur 49.0 --out bgm.wav    # 指定随机种子(可复现)
 python scripts/gen_bgm.py --random 0 --dur 49.0                   # 关闭随机，用默认首(暖阳C)
-python scripts/mix_bgm.py 最终成片.mp4 bgm_light.wav 最终成片_带BGM.mp4 0.20
+# 混音（第6参=倍速，默认 1.1，即每次成品自动加速 10%）
+python scripts/mix_bgm.py 最终成片.mp4 bgm_light.wav 最终成片_带BGM.mp4 0.20 0.92 1.1
+# 不变速写 1.0（视频走拷贝，零二次编码）
+python scripts/mix_bgm.py 最终成片.mp4 bgm_light.wav 最终成片_带BGM.mp4 0.20 0.92 1.0
 ```
-`0.20` 是 BGM 音量比，觉得偏大/偏小改此值重混即可，不必重新渲染。随机想复现某次就记下终端打印的 `seed=xxx` 再传 `--seed`。
+`0.20` 是 BGM 音量比，`0.92` 是口播音量比，`1.1` 是**整体倍速（默认）**——对视频与音频统一加速，口播与 BGM 仍同步。觉得偏大/偏小改前两个值重混即可，不必重新渲染；想去掉加速传 `1.0`。随机想复现某次就记下终端打印的 `seed=xxx` 再传 `--seed`。
 
 ## 已知坑（务必先看）
 
@@ -80,3 +84,4 @@ python scripts/mix_bgm.py 最终成片.mp4 bgm_light.wav 最终成片_带BGM.mp4
 5. **中文关键词错位**：模型可能把关键词写到额头/底部而非指定位置。靠双锁 Prompt 压制，必要时图生图局部擦除重出。
 6. **中文字体**：字幕用系统 `Microsoft YaHei`（或 `simhei`），确保 ffmpeg/Chrome 能取到。
 7. **配音联网**：edge_tts 需联网；首次跑确认能出 m4a 再批量。
+8. **多项目必须显式设 `WB_WORKDIR`**：脚本内置默认工程目录是创建时的目录，不设环境变量时配音/成片会写进那个旧目录，甚至覆盖旧项目同名文件（实测发生过：gen_voice 覆盖了上一条片的音频）。每个新项目开工先设 `$env:WB_WORKDIR=<项目目录>` 再跑任何脚本。
