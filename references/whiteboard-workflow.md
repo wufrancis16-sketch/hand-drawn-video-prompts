@@ -60,11 +60,16 @@ python scripts/render_whiteboard2.py 1 3    # 只渲某几镜（调参验证用�
 原理：每部件生成蛇形软边笔刷路径，按时间轴用 mask 逐步揭示原图；持笔手跟随当前笔尖位置 + 轻微抖动；底部黄字黑边字幕。逐帧用 Chrome 截图 1920×1080@25fps，ffmpeg 合成每镜 mp4，**前台**跑（本机后台任务约 2 分钟会被强制终止）。
 
 ### ⑦ BGM 合成 + 混音
+BGM 为纯标准库合成的慢速钢琴琶音（无版权风险），内置 **6 首不同调性/情绪预设**，**默认每次随机选一首**，成片不单调：
 ```bash
-python scripts/gen_bgm.py --dur 49.0 --out bgm_light.wav   # 时长≈成片时长
+python scripts/gen_bgm.py --dur 49.0 --out bgm_light.wav          # 默认随机一首
+python scripts/gen_bgm.py --list                                  # 列出全部 6 首(暖阳C/微风G/月光F/清晨D/静夜Am/海岸E)
+python scripts/gen_bgm.py --variant 3 --dur 49.0 --out bgm.wav    # 指定第 3 首(固定)
+python scripts/gen_bgm.py --seed 1234 --dur 49.0 --out bgm.wav    # 指定随机种子(可复现)
+python scripts/gen_bgm.py --random 0 --dur 49.0                   # 关闭随机，用默认首(暖阳C)
 python scripts/mix_bgm.py 最终成片.mp4 bgm_light.wav 最终成片_带BGM.mp4 0.20
 ```
-BGM 为纯标准库合成的慢速大调钢琴琶音（无版权风险）。`0.20` 是 BGM 音量比，觉得偏大/偏小改此值重混即可，不必重新渲染。
+`0.20` 是 BGM 音量比，觉得偏大/偏小改此值重混即可，不必重新渲染。随机想复现某次就记下终端打印的 `seed=xxx` 再传 `--seed`。
 
 ## 已知坑（务必先看）
 
