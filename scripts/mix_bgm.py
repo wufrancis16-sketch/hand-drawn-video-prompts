@@ -4,6 +4,8 @@
 依赖：ffmpeg（WB_FFMPEG 或系统 ffmpeg）。
 倍速说明：speed>1 表示加速（如 1.1=快 10%）。对视频与音频统一变速，保持口播/BGM 同步。
           默认 1.1（每次成品自动加速）；传入 1.0 即不变速（视频走拷贝，零二次编码）。
+BGM 时长：BGM 短于成片时会自动循环补齐（-stream_loop -1），因此 gen_bgm 的 --dur
+          略短也不会在片尾断掉；但建议仍按「渲染总时长（倍速前）」给足，避免循环点突兀。
 """
 import os, sys, subprocess
 
@@ -22,16 +24,18 @@ def main():
     audio_filt = ("[0:a]volume=%s[voice];[1:a]volume=%s[bgm];"
                   "[voice][bgm]amix=inputs=2:duration=first:dropout_transition=0:normalize=0[mixed]"
                   % (voice_vol, bgm_vol))
+    # BGM 用 -stream_loop -1 无限循环，配合 amix duration=first 自动裁到视频长度，
+    # 保证 BGM 短于成片时片尾也不静音。
     if abs(speed - 1.0) < 1e-6:
         # 不变速：视频直接拷贝，仅混音（无二次编码）
         filt = audio_filt
-        cmd = [FF, '-y', '-i', src, '-i', bgm, '-filter_complex', filt,
+        cmd = [FF, '-y', '-i', src, '-stream_loop', '-1', '-i', bgm, '-filter_complex', filt,
                '-map', '0:v', '-map', '[mixed]', '-c:v', 'copy', '-c:a', 'aac', '-b:a', '160k', out]
     else:
         # 变速：视频 setpts + 音频 atempo，统一加速，口播与 BGM 仍同步
         filt = (audio_filt +
                 ";[0:v]setpts=%s*PTS[v];[mixed]atempo=%s[aout]" % (1.0 / speed, speed))
-        cmd = [FF, '-y', '-i', src, '-i', bgm, '-filter_complex', filt,
+        cmd = [FF, '-y', '-i', src, '-stream_loop', '-1', '-i', bgm, '-filter_complex', filt,
                '-map', '[v]', '-map', '[aout]', '-c:v', 'libx264', '-preset', 'medium',
                '-crf', '18', '-c:a', 'aac', '-b:a', '160k', out]
     subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)

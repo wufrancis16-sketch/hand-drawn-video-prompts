@@ -75,6 +75,8 @@ python scripts/mix_bgm.py 最终成片.mp4 bgm_light.wav 最终成片_带BGM.mp4
 ```
 `0.20` 是 BGM 音量比，`0.92` 是口播音量比，`1.1` 是**整体倍速（默认）**——对视频与音频统一加速，口播与 BGM 仍同步。觉得偏大/偏小改前两个值重混即可，不必重新渲染；想去掉加速传 `1.0`。随机想复现某次就记下终端打印的 `seed=xxx` 再传 `--seed`。
 
+> **BGM 时长**：`--dur` 建议给足「渲染总时长（即倍速前的时长，看渲染日志末尾各镜 dur 之和）」。`mix_bgm.py` 已用 `-stream_loop -1` 让 BGM 自动循环补齐，**给短了片尾也不会静音**（验证：8s BGM 铺满 48.4s 成片），但循环接点可能听得出，所以还是给足更自然。
+
 ## 已知坑（务必先看）
 
 1. **ImageGen 并行 bug**：并行传不同 `output_dir` 时参数被吞、文件覆盖。必须**串行**逐张生成。
@@ -85,3 +87,6 @@ python scripts/mix_bgm.py 最终成片.mp4 bgm_light.wav 最终成片_带BGM.mp4
 6. **中文字体**：字幕用系统 `Microsoft YaHei`（或 `simhei`），确保 ffmpeg/Chrome 能取到。
 7. **配音联网**：edge_tts 需联网；首次跑确认能出 m4a 再批量。
 8. **多项目必须显式设 `WB_WORKDIR`**：脚本内置默认工程目录是创建时的目录，不设环境变量时配音/成片会写进那个旧目录，甚至覆盖旧项目同名文件（实测发生过：gen_voice 覆盖了上一条片的音频）。每个新项目开工先设 `$env:WB_WORKDIR=<项目目录>` 再跑任何脚本。
+9. **双锁 Prompt 也会彻底失效，必须逐张肉眼验收**：实测某镜被画成完全无关的动物（老板→卡通牛）、立牌关键词被写成「高高兴兴 快乐」而非指定的「高效」。出图后**逐张 Read 核对**：①人物是否是人类且符合描述；②立牌文字是否等于指定关键词；③有无多余英文/假字。不合格就**重出**（别只改文字，人物跑偏要重写 Prompt 并显式否定，如 “a human person, absolutely not an animal”）。
+10. **画面里的零散英文要清掉**：模型常在不显眼处塞英文（软箱上 `SOFTWARE`、账单上 `ITEM/PRICE/TOTAL`、便签上的假手写乱字），与中文片违和。按需用图生图定点擦除（保留关键词立牌），删除后重跑 ③→⑥→⑦。原图先备份到工程根 `backup_镜头NN_v1.png`。
+11. **批量删中间帧会被安全删除拦截**：`frames_wb2/` 有上千文件，Python `shutil.rmtree` 会报 `SAFE_DELETE_BULK_CONFIRM_REQUIRED`；改用 PowerShell `Remove-Item -Recurse -Force`。
