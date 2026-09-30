@@ -26,7 +26,9 @@ description: 手绘白板动画视频生成技能。把中文口播稿变成 16:
 依赖：`pip install playwright edge_tts Pillow`；系统 Chrome；ffmpeg；ImageGen（生图）。
 
 ```bash
-# 1) 横版出图 1536x1024（双锁 Prompt，见 references/whiteboard-prompts.md）→ outputs_land/raw/镜头NN.png
+# 1) 横版出图 1536x1024（双锁 Prompt，见 references/whiteboard-prompts.md）→ outputs_land/raw/
+#    ImageGen 文件名是随机的，必须改名成 镜头NN.png（按 mtime 顺序，串行生图故即镜头顺序）
+python scripts/rename_shots.py
 # 2) 底色校正 + 去水印
 python scripts/fix_bg.py <WB_WORKDIR>/outputs_land/raw <WB_WORKDIR>/outputs_land/final 1380,940,1536,1024
 # 3) 逐镜配音（edge_tts，联网）
