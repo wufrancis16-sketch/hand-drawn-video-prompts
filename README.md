@@ -26,6 +26,7 @@ hand-drawn-video-prompts/
 │   └── output-example.md            # 输出示例
 └── scripts/
     ├── render_whiteboard2.py        # 逐元素显绘渲染（核心）
+    ├── rename_shots.py              # ImageGen 随机文件名 → 镜头NN.png
     ├── gen_voice.py                 # 逐镜配音（edge_tts）
     ├── gen_bgm.py                   # 轻音乐 BGM 合成（纯标准库）
     ├── mix_bgm.py                   # BGM 低音量混音

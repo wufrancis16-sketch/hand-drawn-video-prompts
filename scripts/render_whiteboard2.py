@@ -277,9 +277,13 @@ if __name__ == '__main__':
     if len(shots) == 10:
         lst = os.path.join(OUT, 'concat.txt')
         with open(lst, 'w', encoding='utf-8') as f:
+            # 必须写【绝对路径】：ffmpeg 的 concat demuxer 把清单里的相对路径
+            # 解析为「相对清单文件所在目录」，写相对路径会 File not found（rc=-2）。
             for m in sorted(parts):
                 f.write("file '%s'\n" % m.replace('\\', '/'))
-        final = os.path.join(WORK, 'ERP科普_手绘显绘v2_16x9.mp4')
+        # 成片名：WB_OUTNAME 优先；否则用工程目录名，避免每个项目都叫 ERP科普
+        default_name = os.path.basename(os.path.normpath(WORK)) + '_手绘显绘_16x9.mp4'
+        final = os.path.join(WORK, os.environ.get('WB_OUTNAME', default_name))
         subprocess.run([FF, '-f', 'concat', '-safe', '0', '-i', lst, '-c', 'copy', '-y', final],
                        cwd=WORK, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         print('FINAL', final, os.path.getsize(final), flush=True)

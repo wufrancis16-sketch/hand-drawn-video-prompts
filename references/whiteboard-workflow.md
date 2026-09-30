@@ -35,6 +35,13 @@
 - 结尾锁「指定关键词只出现在 XX 位置、恰好一次、不变形」
 关键：模型会自作主张加底部大标题或把关键词写错位置，必须双锁 + 必要时图生图擦除。
 
+**出图后第一步必须改名**：ImageGen 落盘的文件名是「提示词开头截断 + 时间戳」（如 `Do_not_add_any_title__caption__2026-09-30T01-47-36.png`），而后续 `fix_bg` / `render_whiteboard2` 都按 `镜头NN.png` 读取，文档里写的「输出去 outputs_land/raw/镜头NN.png」不会自动成立。因为生图是**串行**的，mtime 顺序 == 镜头顺序，直接跑
+```bash
+python scripts/rename_shots.py            # 按 mtime 顺序批量改名（已命名的跳过，重跑安全）
+python scripts/rename_shots.py --list     # 只看不改（改名顺序对不对）
+```
+补出某几镜后用 `--start 6` 从第 6 镜接着编号。
+
 ### ③ 底色校正 + 去水印
 ```bash
 python scripts/fix_bg.py <WB_WORKDIR>/outputs_land/raw <WB_WORKDIR>/outputs_land/final <水印矩形x0,y0,x1,y1>
@@ -59,6 +66,10 @@ python scripts/render_whiteboard2.py        # 全部 10 镜 + 自动拼接成片
 python scripts/render_whiteboard2.py 1 3    # 只渲某几镜（调参验证用）
 ```
 原理：每部件生成蛇形软边笔刷路径，按时间轴用 mask 逐步揭示原图；持笔手跟随当前笔尖位置 + 轻微抖动；底部黄字黑边字幕。逐帧用 Chrome 截图 1920×1080@25fps，ffmpeg 合成每镜 mp4，**前台**跑（本机后台任务约 2 分钟会被强制终止）。
+
+**成片命名**：脚本默认用「工程目录名 + `_手绘显绘_16x9.mp4`」，可用环境变量 `WB_OUTNAME` 覆盖。
+
+**分批渲染（10 镜超过单次前台时限时用）**：脚本只在「一次传满 10 镜」时才自动拼接，分批跑不会拼。做法是 `render_whiteboard2.py 1 2 3 4 5` → `render_whiteboard2.py 6 7 8 9 10`，再手动 concat。**手动写 concat 清单必须用绝对路径**——ffmpeg 的 concat demuxer 把清单里的相对路径解析为「相对清单文件所在目录」，写 `shots_wb2/shot01_wb2.mp4` 会变成 `shots_wb2/shots_wb2/...` 而报 `rc=-2`（实测踩过）。脚本自己写的那份清单本来就是绝对路径，所以自动拼接不会踩到。
 
 ### ⑦ BGM 合成 + 混音
 BGM 为纯标准库合成的慢速钢琴琶音（无版权风险），内置 **6 首不同调性/情绪预设**，**默认每次随机选一首**，成片不单调：
