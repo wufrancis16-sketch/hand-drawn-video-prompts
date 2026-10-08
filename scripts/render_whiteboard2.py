@@ -266,7 +266,7 @@ def render_shot(i, browser):
 
 if __name__ == '__main__':
     os.makedirs(OUT, exist_ok=True)
-    shots = [int(a) for a in sys.argv[1:] if a.isdigit()] or list(range(1, 11))
+    shots = [int(a) for a in sys.argv[1:] if a.isdigit()] or list(range(1, len(SUBS)+1))
     parts = []
     with sync_playwright() as p:
         browser = p.chromium.launch(executable_path=CHROME,
@@ -274,7 +274,7 @@ if __name__ == '__main__':
         for i in shots:
             parts.append(render_shot(i, browser))
         browser.close()
-    if len(shots) == 10:
+    if len(shots) == len(SUBS):
         lst = os.path.join(OUT, 'concat.txt')
         with open(lst, 'w', encoding='utf-8') as f:
             # 必须写【绝对路径】：ffmpeg 的 concat demuxer 把清单里的相对路径

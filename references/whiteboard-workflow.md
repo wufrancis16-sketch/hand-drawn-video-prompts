@@ -2,9 +2,21 @@
 
 把中文口播稿变成 **16:9 白板手绘动画**：一只手握着马克笔，画面跟着口播**逐元素被画出来**，底部黄字字幕 + 中文配音 + 低音量轻音乐 BGM。全部本地生成，零视频生成额度消耗（仅生图 + TTS 联网）。
 
+## 执行方式：全自动，不逐步确认 ★
+
+用户给出完整口播稿 = 授权端到端执行。从建目录到交付成片**一口气跑完**，不要逐步骤问“要不要继续”。
+
+- 动工前只说一句额度消耗（每镜约 5–10 额度）。
+- 出图后自行逐张验收（人类？立牌字对？有无多余英文/涂鸦？），有瑕疵直接图生图返工。
+- 镜数由 `SUBS` 长度决定（`render_whiteboard2.py` 已按 `len(SUBS)` 驱动，不再写死 10 镜）；长稿 12–16 镜。
+- 只有方向性选择（画风 / 配音音色 / 选题方向）才找用户确认。
+
 ## 依赖
 
 - Python 3.10+，安装：`pip install playwright edge_tts Pillow`
+- **本机用哪个解释器（重要，2026-10-08 实测）**：不要用裸 `binaries\python\versions\3.13.12\python.exe`——它是干净解释器，**没有** playwright / Pillow / edge_tts，直接跑会 `ModuleNotFoundError`。流水线一律用隔离环境
+  `C:\Users\Administrator\.workbuddy\binaries\python\envs\default\Scripts\python.exe`（playwright + Pillow + numpy 齐备）。
+  缺 edge_tts 时：该解释器 `-m pip install edge-tts`；若随后报 `No module named 'typing_extensions'`，再 `-m pip install --force-reinstall --no-deps typing-extensions`（该环境 site-packages 有个 `~ip` 坏分发会干扰依赖判定，属无害警告）。
 - 系统 Chrome（`WB_CHROME`，默认 `C:\Program Files\Google\Chrome\Application\chrome.exe`）
 - ffmpeg（`WB_FFMPEG` / `WB_FFPROBE`）
 - 生图工具 ImageGen（横版静帧）、可选图生图（擦除瑕疵）
@@ -99,5 +111,8 @@ python scripts/mix_bgm.py 最终成片.mp4 bgm_light.wav 最终成片_带BGM.mp4
 7. **配音联网**：edge_tts 需联网；首次跑确认能出 m4a 再批量。
 8. **多项目必须显式设 `WB_WORKDIR`**：脚本内置默认工程目录是创建时的目录，不设环境变量时配音/成片会写进那个旧目录，甚至覆盖旧项目同名文件（实测发生过：gen_voice 覆盖了上一条片的音频）。每个新项目开工先设 `$env:WB_WORKDIR=<项目目录>` 再跑任何脚本。
 9. **双锁 Prompt 也会彻底失效，必须逐张肉眼验收**：实测某镜被画成完全无关的动物（老板→卡通牛）、立牌关键词被写成「高高兴兴 快乐」而非指定的「高效」。出图后**逐张 Read 核对**：①人物是否是人类且符合描述；②立牌文字是否等于指定关键词；③有无多余英文/假字。不合格就**重出**（别只改文字，人物跑偏要重写 Prompt 并显式否定，如 “a human person, absolutely not an animal”）。
+   - **重复立牌**：同一关键词被画成**两块牌子**是高频失效形态（实测「记忆」「自动」各出两块，`appears exactly once` 管不住）。验收必须确认“关键词恰好出现一次”，多出来的那块用图生图定点擦掉（重绘背景 #F8F6EF），保留其中一块。
 10. **画面里的零散英文要清掉**：模型常在不显眼处塞英文（软箱上 `SOFTWARE`、账单上 `ITEM/PRICE/TOTAL`、便签上的假手写乱字），与中文片违和。按需用图生图定点擦除（保留关键词立牌），删除后重跑 ③→⑥→⑦。原图先备份到工程根 `backup_镜头NN_v1.png`。
+    - **整页假数据**：空白单据会被模型填满假字段（实测订单纸写出「订单编号 D-001 / 下单日期 2024-05-20 / 数量 10 20 30」）。这种整页杂字**擦除成本高于重出**，直接重出并在 Prompt 里强调 `completely blank, no writing, no numbers, no letters, no table lines` 更快更干净。
+    - **底部整行乱码中文**：模型也会在字幕预留区写一行通顺度极差的中文（实测「问题这一样？结果有的的假接订表。」），必须擦掉——它会和真字幕打架。
 11. **批量删中间帧会被安全删除拦截**：`frames_wb2/` 有上千文件，Python `shutil.rmtree` 会报 `SAFE_DELETE_BULK_CONFIRM_REQUIRED`；改用 PowerShell `Remove-Item -Recurse -Force`。
