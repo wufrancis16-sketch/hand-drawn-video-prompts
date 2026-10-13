@@ -18,11 +18,15 @@ except Exception:
 
 VOICE = 'zh-CN-YunyangNeural'  # 男声（沉稳，适合科普讲解）；女声可改 zh-CN-XiaoxiaoNeural
 AUD = os.path.join(WORK, 'shots', 'aud')
+# 代理：Edge 服务端对部分网络出口返回 403（WSServerHandshakeError），
+# 本机有代理时设 EDGE_TTS_PROXY=http://127.0.0.1:7890 即可正常合成。
+PROXY = os.environ.get('EDGE_TTS_PROXY') or None
 
 
 async def tts_one(n, text):
     out = os.path.join(AUD, 'shot%02d.m4a' % n)
-    comm = edge_tts.Communicate(text, VOICE)
+    kw = {'proxy': PROXY} if PROXY else {}
+    comm = edge_tts.Communicate(text, VOICE, **kw)
     await comm.save(out)
     return out
 

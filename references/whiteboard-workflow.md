@@ -128,3 +128,7 @@ python scripts/mix_bgm.py 最终成片.mp4 bgm_light.wav 最终成片_带BGM.mp4
       先扫出列／行再定矩形；两侧留 10–20px 安全间距避开人物与货架。**填完必须跑 `fix_bg.py`**，底色归一化后填充痕迹完全看不出来（raw 阶段偏白是正常的，别据此判断失败）。
     - **抹除前先备份原图**（`backup_镜头NN_v1.png`），填错能回滚重做——本轮正是靠备份救回来的。
     - 填充值用 `(248,246,239)` 并叠 ±5 随机噪声，比纯色块更接近纸纹。
+13. **出图必须严格串行——ImageGen 文件名只精确到秒，同秒完成会互相覆盖**：实测一次并行发 6 个请求，其中 3 张在同一秒落盘、写进同一个 `Do_not_add_any_title__caption__2026-...T01-19-03.png`，6 张最后只剩 4 个文件（丢了 2 镜，只能重出）。做法：**一次只发一个请求**，返回后立刻把该文件改名为 `镜头NN.png`，再发下一张；不要依赖批量 rename（撞车后无法判断谁是谁）。每出一张顺手 Read 验收，立牌文字/人物一次过最好。
+14. **edge-tts 报 403 时改走本地代理**：症状 `WSServerHandshakeError: 403, message='Invalid response status'`，指向 `wss://speech.platform.bing.com/...`。**本机时间与网络时间一致、edge-tts 已是最新版也照样报**（排除时钟与版本因素）。实测本机 `127.0.0.1:7890` 有代理，改 `edge_tts.Communicate(text, voice, proxy='http://127.0.0.1:7890')` 立即成功。`gen_voice.py` 已支持环境变量 `EDGE_TTS_PROXY`（不设则直连，保持原行为）。
+    - 探代理端口用 Python `socket`（`connect(('127.0.0.1',p))`），别用 PowerShell——`New-Object -ComObject` / `Add-Type` 都会被沙箱以“可执行任意代码”拦掉，从 Bash 调 `powershell.exe` 也会被拦。
+    - 备用通道：系统 SAPI 只有 `Microsoft Huihui Desktop`（中文女声），男声云扬必须走 edge-tts；`comtypes` 可枚举声线（`CreateObject('SAPI.SpVoice').GetVoices()`）。
