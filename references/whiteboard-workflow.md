@@ -78,6 +78,7 @@ python scripts/render_whiteboard2.py        # 全部 10 镜 + 自动拼接成片
 python scripts/render_whiteboard2.py 1 3    # 只渲某几镜（调参验证用）
 ```
 原理：每部件生成蛇形软边笔刷路径，按时间轴用 mask 逐步揭示原图；持笔手跟随当前笔尖位置 + 轻微抖动；底部黄字黑边字幕。逐帧用 Chrome 截图 1920×1080@25fps，ffmpeg 合成每镜 mp4，**前台**跑（本机后台任务约 2 分钟会被强制终止）。
+时间轴为 `ENTER 入场 → 逐元素绘制(含笔移动) → COMP 全图补全淡入 → EXIT 静止留白`。**COMP 段是必需的**：mask 只揭示 ELEMS 框内像素，而框是肉眼估的、必然估偏，框外笔画会永久缺失导致"图画不全"。COMP 用 `ease` 把整张原图淡入（底纸与画布同色 `#F8F6EF`，所以只看得见残留笔画浮现），保证每镜收尾画面 100% 完整（详见「已知坑 14」）。
 
 **成片命名**：脚本默认用「工程目录名 + `_手绘显绘_16x9.mp4`」，可用环境变量 `WB_OUTNAME` 覆盖。
 
@@ -129,6 +130,28 @@ python scripts/mix_bgm.py 最终成片.mp4 bgm_light.wav 最终成片_带BGM.mp4
     - **抹除前先备份原图**（`backup_镜头NN_v1.png`），填错能回滚重做——本轮正是靠备份救回来的。
     - 填充值用 `(248,246,239)` 并叠 ±5 随机噪声，比纯色块更接近纸纹。
 13. **出图必须严格串行——ImageGen 文件名只精确到秒，同秒完成会互相覆盖**：实测一次并行发 6 个请求，其中 3 张在同一秒落盘、写进同一个 `Do_not_add_any_title__caption__2026-...T01-19-03.png`，6 张最后只剩 4 个文件（丢了 2 镜，只能重出）。做法：**一次只发一个请求**，返回后立刻把该文件改名为 `镜头NN.png`，再发下一张；不要依赖批量 rename（撞车后无法判断谁是谁）。每出一张顺手 Read 验收，立牌文字/人物一次过最好。
-14. **edge-tts 报 403 时先升级到 ≥7.3.1，再走本地代理**：症状 `WSServerHandshakeError: 403, message='Invalid response status'`，指向 `wss://speech.platform.bing.com/...`。**2026-10-14 实测根因是微软淘汰旧版 Sec-MS-GEC token**：7.2.8 硬编码 `Sec-MS-GEC-Version=1-143.0.3650.75`，服务端已拒绝该版本（表现为 403，**与时钟、网络无关，当天直连和代理都报**）；升级 `pip install -U edge-tts==7.3.1` 后 token 变为 `2-143.0.3650.75` 立即恢复。**所以"已是最新版"这个判断有时效性——踩坑时先 `pip index versions edge-tts` 看有没有新版。** 代理仍要保留：7.3.1 单条测试走 `http://127.0.0.1:7890` 成功，但全量连跑时首条可能 `ConnectionTimeoutError`（冷启动抖动），原样重跑一次即可。`gen_voice.py` 已支持环境变量 `EDGE_TTS_PROXY`（不设则直连，保持原行为）。
+14. **元素框估偏 → 画面被"切碎/没画全"（收尾必须补全整图）** ★ 2026-10-14 修复
+    - **症状**：成片里好几镜"图画不全就切下一张"，人物缺胳膊、连线断成几段、图标被切成碎片，观众根本看不懂整幅图。
+    - **根因**：`HAND/手绘揭示` 的 mask **只揭示 ELEMS 框内的像素**，框外一律永远不显示。ELEMS 归一化坐标是凭肉眼在生成图上估的，必然估偏／框紧；一旦偏个 5%–10%，框外的笔画（人物边缘、箭头连线、图标外框）就永久缺失。**这不是渲染 bug，是坐标精度问题，靠手动修坐标无底洞。**
+    - **量化诊断**（写一次就够，改坐标前后都能用）：把 ELEMS 框映射回原图坐标，统计「非底纸色像素中落在所有框之外的占比」= 残留率。
+      ```python
+      ink  = (np.abs(img.astype(np.int16) - np.array([248,246,239])).max(axis=2) > 26)
+      cov  = np.zeros_like(ink)   # 逐个框置 True
+      hidden = (ink & ~cov).sum() / ink.sum()
+      ```
+      实测：`erp_vs_jxc` 平均残留 **36%**（15 镜全部 ≥8%，最差镜 12 达 62%），其余项目 2.7%–13.9%。**残留率 >8% 就会明显"看不懂"**。
+    - **修复（脚本已内置，2026-10-14 起 `render_whiteboard2.py` 自带）**：时间轴在最后一笔之后插入 **COMP 全图补全阶段**——用 `ease` 把**整张原图**以 `globalAlpha 0→1` 淡入到已绘层之上。因为 `fix_bg.py` 已把底纸统一成画布底色 `#F8F6EF`，淡入时**纸面与背景完全同色**，视觉上只有"残留笔画"浮现，看不到任何矩形或色块 → 观感就是"最后补完那几笔"。
+      时间轴变为 `ENTER → 逐元素绘制 → COMP(≈0.4–0.7s) → EXIT(≈0.55–1.2s 静止留白)`：
+      ```js
+      const COMP = Math.max(0.40, Math.min(0.70, DUR*0.10));
+      const EXIT = Math.max(0.55, Math.min(1.20, DUR*0.09));   // 补全后静止，给足读图时间
+      SEG.push({type:'comp', t0:acc, t1:acc+COMP, from:prev, to:HOME});
+      ```
+      `moved` 段同时从 `MOVE = min(0.14, DUR*0.03)` 收紧到 `min(0.10, DUR*0.025)`，把省下的时间还给绘制。
+    - **顺带解决"没看明白就切走"**：旧参数 `EXIT = max(0.35, DUR*0.07)` 意味着最后一笔后仅 0.35–0.6s 就切镜，根本没时间看；现在留白翻倍。
+    - **不要再用"把框画大"来兜底**：框放大到重叠会提前揭示相邻元素，破坏逐笔绘制感；补全淡入才是正解，且对任意估偏都免疫。
+    - **验收口径**：修复后抽末帧与 `outputs_land/final/镜头NN_bgfix.png` 并排比对，两者应一致（不再有被直线切掉的边）。
+
+15. **edge-tts 报 403 时先升级到 ≥7.3.1，再走本地代理**：症状 `WSServerHandshakeError: 403, message='Invalid response status'`，指向 `wss://speech.platform.bing.com/...`。**2026-10-14 实测根因是微软淘汰旧版 Sec-MS-GEC token**：7.2.8 硬编码 `Sec-MS-GEC-Version=1-143.0.3650.75`，服务端已拒绝该版本（表现为 403，**与时钟、网络无关，当天直连和代理都报**）；升级 `pip install -U edge-tts==7.3.1` 后 token 变为 `2-143.0.3650.75` 立即恢复。**所以"已是最新版"这个判断有时效性——踩坑时先 `pip index versions edge-tts` 看有没有新版。** 代理仍要保留：7.3.1 单条测试走 `http://127.0.0.1:7890` 成功，但全量连跑时首条可能 `ConnectionTimeoutError`（冷启动抖动），原样重跑一次即可。`gen_voice.py` 已支持环境变量 `EDGE_TTS_PROXY`（不设则直连，保持原行为）。
     - 探代理端口用 Python `socket`（`connect(('127.0.0.1',p))`），别用 PowerShell——`New-Object -ComObject` / `Add-Type` 都会被沙箱以“可执行任意代码”拦掉，从 Bash 调 `powershell.exe` 也会被拦。
     - 备用通道：系统 SAPI 只有 `Microsoft Huihui Desktop`（中文女声），男声云扬必须走 edge-tts；`comtypes` 可枚举声线（`CreateObject('SAPI.SpVoice').GetVoices()`）。

@@ -138,10 +138,15 @@ const ITEMS = ELEMS.map((e) => {
   return { pts: pts2, r, w, start: pts2[0], end: pts2[pts2.length-1] };
 });
 
-// 时间轴
-const ENTER = Math.min(0.4, DUR*0.08), MOVE = Math.min(0.14, DUR*0.03), EXIT = Math.max(0.35, DUR*0.07);
+// 时间轴：ENTER -> 逐元素绘制(含笔移动) -> COMP(全图补全淡入) -> EXIT(收笔离场 + 静止留白)
+const ENTER = Math.min(0.4, DUR*0.08), MOVE = Math.min(0.10, DUR*0.025);
+// COMP：最后一笔画完后，把整张图（含未被元素框覆盖的残留笔画）淡入补全，
+//       避免"元素框估偏 -> 画面被切碎/没画全"导致观众看不懂整幅图
+const COMP = Math.max(0.40, Math.min(0.70, DUR*0.10));
+// EXIT：补全后笔已离场，此段为静止留白，给观众足够时间看清完整画面
+const EXIT = Math.max(0.55, Math.min(1.20, DUR*0.09));
 const HOME = [2250, 1350];
-let total = ENTER + EXIT + MOVE*(ITEMS.length-1);
+let total = ENTER + COMP + EXIT + MOVE*(ITEMS.length-1);
 let wsum = 0; for (const it of ITEMS) wsum += it.w;
 const drawT = DUR - total;
 let acc = ENTER;
@@ -153,8 +158,16 @@ for (let i=0;i<ITEMS.length;i++){
   const d = drawT * it.w / wsum;
   SEG.push({type:'draw', t0:acc, t1:acc+d, item:i}); acc += d; prev = it.end;
 }
-SEG.push({type:'exit', t0:acc, t1:acc+EXIT, from:prev, to:HOME});
-const T_END = acc + EXIT;
+SEG.push({type:'comp', t0:acc, t1:acc+COMP, from:prev, to:HOME});
+SEG.push({type:'exit', t0:acc+COMP, t1:acc+COMP+EXIT, from:HOME, to:HOME});
+const T_END = acc + COMP + EXIT;
+const COMPSEG = SEG[SEG.length-2];
+// 补全进度 0->1：把整张原图淡入到已绘画面之上
+function compProg(t){
+  if (t <= COMPSEG.t0) return 0;
+  if (t >= COMPSEG.t1) return 1;
+  return (t - COMPSEG.t0) / (COMPSEG.t1 - COMPSEG.t0);
+}
 
 function ease(u){ return u*u*(3-2*u); }
 function handPosAt(t){
@@ -209,6 +222,13 @@ function renderAt(t){
   cctx.globalCompositeOperation = 'destination-in';
   cctx.drawImage(mask, 0,0);
   ctx.drawImage(comp, 0,0);
+  const cp = compProg(t);
+  if (cp > 0){
+    // 底纸色与画布底色一致，因此淡入时视觉上只有"残留笔画"浮现，不会看到整块矩形
+    ctx.globalAlpha = ease(cp);
+    ctx.drawImage(IMG, 0,0,IMG.width,IMG.height, IMGX,0,IMGW,IMGH);
+    ctx.globalAlpha = 1;
+  }
   const hp = handPosAt(t);
   if (hp) ctx.drawImage(HAND, hp[0]-TXF*HW, hp[1]-TYF*HH, HW, HH);
   const lines = wrap(SUBS, 24);
