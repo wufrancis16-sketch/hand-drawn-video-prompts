@@ -41,16 +41,18 @@ description: 手绘白板动画视频生成技能。把中文口播稿变成 16:
 python scripts/rename_shots.py
 # 2) 底色校正 + 去水印
 python scripts/fix_bg.py <WB_WORKDIR>/outputs_land/raw <WB_WORKDIR>/outputs_land/final 1380,940,1536,1024
-# 3) 逐镜配音（edge_tts，联网）
+# 3) 自动收紧元素框（必做）：把 ELEMS 的粗略锚框贴合到真实墨迹，残留率归零
+python scripts/auto_elems.py <WB_WORKDIR>
+# 4) 逐镜配音（edge_tts，联网）
 python scripts/gen_voice.py
-# 4) 逐元素显绘渲染（前台跑！后台会被 2 分钟杀）
+# 5) 逐元素显绘渲染（前台跑！后台会被 2 分钟杀）
 python scripts/render_whiteboard2.py          # 全部镜 + 拼接成片（镜数由 SUBS 决定）
-# 5) 轻音乐 BGM + 混音
+# 6) 轻音乐 BGM + 混音
 python scripts/gen_bgm.py --dur 49.0 --out bgm_light.wav
 python scripts/mix_bgm.py 成片.mp4 bgm_light.wav 成片_带BGM.mp4 0.20
 ```
 
-配置：`SUBS`（每镜口播文案）与 `ELEMS`（每镜部件序列 `[nx,ny,nw,nh,权重]`，按口播顺序）在 `scripts/render_whiteboard2.py` 顶部按项目填写；`WB_WORKDIR` / `WB_FFMPEG` / `WB_CHROME` 用环境变量覆盖机器路径。
+配置：`SUBS`（每镜口播文案）与 `ELEMS`（每镜部件序列 `[nx,ny,nw,nh,权重]`，按口播顺序，**只写粗略锚框即可**，交给 `auto_elems.py` 收紧）在 `scripts/render_whiteboard2.py` 顶部按项目填写；`WB_WORKDIR` / `WB_FFMPEG` / `WB_CHROME` 用环境变量覆盖机器路径。
 
 **为什么生动**：`ELEMS` 决定画面“先画哪个部件、后画哪个部件”，手跟着笔尖移动——画面跟着脚本逻辑长出来，而不是整图左→右硬扫。
 
