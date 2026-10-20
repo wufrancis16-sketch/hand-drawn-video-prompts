@@ -165,3 +165,26 @@ python scripts/mix_bgm.py 最终成片.mp4 bgm_light.wav 最终成片_带BGM.mp4
 15. **edge-tts 报 403 时先升级到 ≥7.3.1，再走本地代理**：症状 `WSServerHandshakeError: 403, message='Invalid response status'`，指向 `wss://speech.platform.bing.com/...`。**2026-10-14 实测根因是微软淘汰旧版 Sec-MS-GEC token**：7.2.8 硬编码 `Sec-MS-GEC-Version=1-143.0.3650.75`，服务端已拒绝该版本（表现为 403，**与时钟、网络无关，当天直连和代理都报**）；升级 `pip install -U edge-tts==7.3.1` 后 token 变为 `2-143.0.3650.75` 立即恢复。**所以"已是最新版"这个判断有时效性——踩坑时先 `pip index versions edge-tts` 看有没有新版。** 代理仍要保留：7.3.1 单条测试走 `http://127.0.0.1:7890` 成功，但全量连跑时首条可能 `ConnectionTimeoutError`（冷启动抖动），原样重跑一次即可。`gen_voice.py` 已支持环境变量 `EDGE_TTS_PROXY`（不设则直连，保持原行为）。
     - 探代理端口用 Python `socket`（`connect(('127.0.0.1',p))`），别用 PowerShell——`New-Object -ComObject` / `Add-Type` 都会被沙箱以“可执行任意代码”拦掉，从 Bash 调 `powershell.exe` 也会被拦。
     - 备用通道：系统 SAPI 只有 `Microsoft Huihui Desktop`（中文女声），男声云扬必须走 edge-tts；`comtypes` 可枚举声线（`CreateObject('SAPI.SpVoice').GetVoices()`）。
+
+16. **出图会突然"海报化"：底部大标题 + 英文副标题 + 网格纸背景** ★ 2026-10-20 实测
+    同一套双锁 Prompt，个别镜（本条片的收尾立牌镜）会整幅退化成"海报排版"：下方一条通栏大标题写着关键词「进销存」，紧跟一行英文副标题 `Inventory Management System`，背景还从纯色纸面变成方格纸。这种废图**不能用矩形擦除救**（标题占满底边、网格是整幅底纹），直接重出，并在 Prompt 里追加三条硬约束：
+    - `The ONLY text in the entire picture is the ... on the wooden sign board; there is absolutely no large title and no English words anywhere.`
+    - `The background must be a plain solid warm-white surface with the exact base color #F8F6EF, absolutely NO grid lines, NO graph paper texture and NO ruled paper pattern.`
+    - 开头锁词加 `banner`（模型把"海报标题条"理解成 banner）。
+
+17. **画面最下沿会有一整行极淡的手写字，且不在右下角水印框内** ★ 2026-10-20 实测
+    `fix_bg` 只擦右下角水印矩形，但模型偶尔会在**底边通栏**写一行非常淡的手写体（实测镜 05：y≈1004–1023、x≈313–1063，肉眼几乎看不出，放大才见）。它会和字幕区打架。做法：底色校正后统一扫一遍底沿，命中就整条填底色（该区域恒为字幕留白，填色安全）：
+    ```python
+    import numpy as np, glob, os
+    from PIL import Image
+    BG = np.array([248, 246, 239], dtype=np.int16)
+    for f in sorted(glob.glob('<WB_WORKDIR>/outputs_land/final/镜头*_bgfix.png')):
+        a = np.asarray(Image.open(f).convert('RGB'), dtype=np.int16)
+        H = a.shape[0]
+        ink = np.abs(a[int(H*0.86):] - BG).max(axis=2) > 26
+        if ink.sum() > 400:
+            print('底沿有残留:', os.path.basename(f), int(ink.sum()))
+    ```
+    判定阈值取 400 像素：人物脚/桌腿压在底沿是正常内容（几千像素但集中成一两块），通栏手写字则是细碎分布。命中的镜直接 `a[990:1024, :] = 底色+微噪`。
+
+18. **"公司员工"会被画成小学生**：描述 `office colleague` 时模型给的是短裤 + 领带 + 圆脸的儿童形象，跟"公司员工"语义不符。锁法：`adult Q-version Chinese office worker in his thirties ... long dark trousers, absolutely no shorts and no necktie`。同类问题还有"老板"被画成戴皇冠的卡通国王，一律在 Prompt 里点明年龄与服装。
